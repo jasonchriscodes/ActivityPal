@@ -23,7 +23,7 @@ export default observer(function ActivityDashboard() {
     if (activityRegistry.size <= 1) loadActivities();
   }, [activityRegistry.size, loadActivities]);
 
-  if (activityStore.loadingInitial)
+  if (activityStore.loadingInitial && !loadingNext)
     return <LoadingComponent content="Loading activities..." />;
 
   return (
