@@ -1,9 +1,9 @@
-import { PaginatedResult } from "./../models/pagination";
 import axios, { AxiosError, AxiosResponse } from "axios";
 import { toast } from "react-toastify";
 import { history } from "../..";
 import { Activity, ActivityFormValues } from "../models/activity";
-import { Photo, Profile } from "../models/profile";
+import { PaginatedResult } from "../models/pagination";
+import { Photo, Profile, UserActivity } from "../models/profile";
 import { User, UserFormValues } from "../models/user";
 import { store } from "../stores/store";
 
@@ -13,7 +13,7 @@ const sleep = (delay: number) => {
   });
 };
 
-axios.defaults.baseURL = "http://localhost:5000/api";
+axios.defaults.baseURL = process.env.REACT_APP_API_URL;
 
 axios.interceptors.request.use((config) => {
   const token = store.commonStore.token;
@@ -23,7 +23,7 @@ axios.interceptors.request.use((config) => {
 
 axios.interceptors.response.use(
   async (response) => {
-    await sleep(1000);
+    if (process.env.NODE_ENV === "development") await sleep(1000);
     const pagination = response.headers["pagination"];
     if (pagination) {
       response.data = new PaginatedResult(
@@ -35,7 +35,7 @@ axios.interceptors.response.use(
     return response;
   },
   (error: AxiosError) => {
-    const { data, status, config } = error.response!;
+    const { data, status, config, headers } = error.response!;
     switch (status) {
       case 400:
         if (config.method === "get" && data.errors.hasOwnProperty("id")) {
@@ -54,7 +54,15 @@ axios.interceptors.response.use(
         }
         break;
       case 401:
-        toast.error("unauthorised");
+        if (
+          status === 401 &&
+          headers["www-authenticate"]?.startsWith(
+            'Bearer error="invalid_token"'
+          )
+        ) {
+          store.userStore.logout();
+          toast.error("Session expired - please login again");
+        }
         break;
       case 404:
         history.push("/not-found");
@@ -97,6 +105,16 @@ const Account = {
   login: (user: UserFormValues) => requests.post<User>("/account/login", user),
   register: (user: UserFormValues) =>
     requests.post<User>("/account/register", user),
+  fbLogin: (accessToken: string) =>
+    requests.post<User>(`/account/fbLogin?accessToken=${accessToken}`, {}),
+  refreshToken: () => requests.post<User>("/account/refreshToken", {}),
+  verifyEmail: (token: string, email: string) =>
+    requests.post<void>(
+      `/account/verifyEmail?token=${token}&email=${email}`,
+      {}
+    ),
+  resendEmailConfirm: (email: string) =>
+    requests.get(`/account/resendEmailConfirmationLink?email=${email}`),
 };
 
 const Profiles = {
@@ -116,6 +134,10 @@ const Profiles = {
     requests.post(`/follow/${username}`, {}),
   listFollowings: (username: string, predicate: string) =>
     requests.get<Profile[]>(`/follow/${username}?predicate=${predicate}`),
+  listActivities: (username: string, predicate: string) =>
+    requests.get<UserActivity[]>(
+      `/profiles/${username}/activities?predicate=${predicate}`
+    ),
 };
 
 const agent = {
