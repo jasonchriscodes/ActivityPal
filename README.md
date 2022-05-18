@@ -1,1 +1,1 @@
-# ActivityBud
+# ActivityPal
